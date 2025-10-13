@@ -19,8 +19,10 @@ def read_cpu_temp():
     return raw / 1000.0
 
 def cpu_curve(temp):
-    if temp <= min_cpu_temp: return 0
-    elif temp >= max_cpu_temp: return 255
+    if temp <= min_cpu_temp:
+         return 0
+    elif temp >= max_cpu_temp:
+         return 255
     return int((temp - min_cpu_temp) * 255 / (max_cpu_temp - min_cpu_temp))
 
 #gpu
@@ -32,15 +34,20 @@ def get_gpu_temp():
     return int(result.stdout.strip())
 
 def gpu_curve(temp):
-    if temp <= min_gpu_temp: return 26
-    elif temp >= max_gpu_temp: return 100
+    if temp <= min_gpu_temp:
+         return 26
+    elif temp >= max_gpu_temp:
+         return 100
     return int(26 + (temp - min_gpu_temp) * (100 - 26) / (max_gpu_temp - min_gpu_temp))
 
 def set_gpu_fan(speed_percent):
+    # clamp between 0–100
+    speed_percent = max(0, min(100, int(speed_percent)))
     subprocess.run([
         "nvidia-settings",
+        "-a", "[gpu:0]/GPUFanControlState=1",
         "-a", f"[fan:0]/GPUTargetFanSpeed={speed_percent}"
-    ])
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 last_cpu_pwm = None
 last_gpu_percent = None
@@ -72,6 +79,9 @@ try:
             gpu_percent = last_gpu_percent + gpu_step
         elif gpu_percent < last_gpu_percent - gpu_step:
             gpu_percent = last_gpu_percent - gpu_step
+
+        set_gpu_fan(gpu_percent)
+        last_gpu_percent = gpu_percent
 
         print(f"CPU: {cpu_temp:.1f}°C -> {cpu_pwm}, GPU: {gpu_temp}°C -> {gpu_percent}")
         time.sleep(2)
