@@ -1,22 +1,2 @@
 hwmon0 pwm1 = case-fan
 hwmon0 pwm2 = cpu-fan
-
-cat temp1_input 
-cat temp2_input 
-cat temp3_input 
-cat temp4_input 
-cat temp5_input 
-cat temp6_input 
-cat temp7_input 
-cat temp8_input 
-cat temp9_input 
-cat temp10_input 
-cat temp11_input 
-cat temp12_input 
-cat temp13_input 
-cat temp14_input 
-cat temp15_input 
-cat temp16_input 
-cat temp17_input 
-cat temp18_input 
-cat temp19_input 
