@@ -1,17 +1,31 @@
 import time
-from pathlib import Path
 import subprocess
+import json
+from pathlib import Path
 
-cpu_min_temp = 60
-cpu_max_temp = 80
-gpu_min_temp = 60
-gpu_max_temp = 80
-cpu_step = 10
-gpu_step = 5
 
+cpu_step = 20
+gpu_step = 10
+
+CONFIG_PATH = Path(__file__).parent / "config.json"
 CPU_TEMP_PATH = Path("/sys/class/hwmon/hwmon0/temp2_input")
 PWM1_PATH  = Path("/sys/class/hwmon/hwmon0/pwm1")
 PWM2_PATH  = Path("/sys/class/hwmon/hwmon0/pwm2")
+
+#load config
+
+if CONFIG_PATH.exists():
+    with open(CONFIG_PATH, "r") as f:
+        config = json.load(f)
+    cpu_min_temp = config.get("cpu_min", 40)
+    cpu_max_temp = config.get("cpu_max", 80)
+    gpu_min_temp = config.get("gpu_min", 40)
+    gpu_max_temp = config.get("gpu_max", 80)
+else:
+    cpu_min_temp = 60
+    cpu_max_temp = 80
+    gpu_min_temp = 60
+    gpu_max_temp = 80
 
 #cpu
 def read_cpu_temp():
@@ -54,6 +68,18 @@ last_gpu_percent = None
 
 try:
     while True:
+        # reload config
+        if CONFIG_PATH.exists():
+            try:
+                with open(CONFIG_PATH, "r") as f:
+                    config = json.load(f)
+                cpu_min_temp = config.get("cpu_min", 40)
+                cpu_max_temp = config.get("cpu_max", 80)
+                gpu_min_temp = config.get("gpu_min", 40)
+                gpu_max_temp = config.get("gpu_max", 80)
+            except Exception as e:
+                print("Failed to load config:", e)
+
         # CPU
         cpu_temp = read_cpu_temp()
         cpu_pwm = cpu_curve(cpu_temp)
@@ -84,6 +110,6 @@ try:
         last_gpu_percent = gpu_percent
 
         print(f"CPU: {cpu_temp:.1f}°C -> {cpu_pwm}, GPU: {gpu_temp}°C -> {gpu_percent}")
-        time.sleep(2)
+        time.sleep(1)
 except KeyboardInterrupt:
     print("Stopped")

@@ -1,0 +1,6 @@
+{
+  "cpu_min": 40,
+  "cpu_max": 80,
+  "gpu_min": 40,
+  "gpu_max": 80
+}

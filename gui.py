@@ -1,8 +1,14 @@
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QSlider, QPushButton, QGridLayout
 )
+from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtCore import Qt
 import sys
+import json
+from pathlib import Path
+import subprocess
+
+CONFIG_PATH = Path(__file__).parent / "config.json"
 
 class FanControlApp(QWidget):
     def __init__(self):
@@ -37,6 +43,8 @@ class FanControlApp(QWidget):
         self.gpu_max_slider.setValue(80)
         self.gpu_max_slider.valueChanged.connect(self.update_labels)
 
+        self.controller_process = None
+
         # Add widgets to layout
         layout.addWidget(self.cpu_min_label, 0, 0)
         layout.addWidget(self.cpu_min_slider, 0, 1)
@@ -66,8 +74,25 @@ class FanControlApp(QWidget):
         gpu_min = self.gpu_min_slider.value()
         gpu_max = self.gpu_max_slider.value()
 
+        config = {
+            "cpu_min": cpu_min,
+            "cpu_max": cpu_max,
+            "gpu_min": gpu_min,
+            "gpu_max": gpu_max,
+        }
+
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(config, f, indent=2)
+
+        if self.controller_process is None or self.controller_process.poll() is not None:
+            self.controller_process = subprocess.Popen(["sudo", sys.executable, str(Path(__file__).parent / "fan-controller.py")])
+        print(f"Saved settings to {CONFIG_PATH}")
+
         print(f"CPU: {cpu_min}–{cpu_max}°C | GPU: {gpu_min}–{gpu_max}°C")
-        # TODO: Save these to a config file or apply to fan script here
+    def closeEvent(self, event):
+        if self.controller_process is not None:
+            self.controller_process.terminate()
+        event.accept()
 
 
 if __name__ == "__main__":
