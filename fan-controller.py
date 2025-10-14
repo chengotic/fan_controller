@@ -2,10 +2,10 @@ import time
 from pathlib import Path
 import subprocess
 
-min_cpu_temp = 60
-max_cpu_temp = 80
-min_gpu_temp = 60
-max_gpu_temp = 80
+cpu_min_temp = 60
+cpu_max_temp = 80
+gpu_min_temp = 60
+gpu_max_temp = 80
 cpu_step = 10
 gpu_step = 5
 
@@ -19,11 +19,11 @@ def read_cpu_temp():
     return raw / 1000.0
 
 def cpu_curve(temp):
-    if temp <= min_cpu_temp:
+    if temp <= cpu_min_temp:
          return 0
-    elif temp >= max_cpu_temp:
+    elif temp >= cpu_max_temp:
          return 255
-    return int((temp - min_cpu_temp) * 255 / (max_cpu_temp - min_cpu_temp))
+    return int((temp - cpu_min_temp) * 255 / (cpu_max_temp - cpu_min_temp))
 
 #gpu
 def get_gpu_temp():
@@ -34,11 +34,11 @@ def get_gpu_temp():
     return int(result.stdout.strip())
 
 def gpu_curve(temp):
-    if temp <= min_gpu_temp:
+    if temp <= gpu_min_temp:
          return 26
-    elif temp >= max_gpu_temp:
+    elif temp >= gpu_max_temp:
          return 100
-    return int(26 + (temp - min_gpu_temp) * (100 - 26) / (max_gpu_temp - min_gpu_temp))
+    return int(26 + (temp - gpu_min_temp) * (100 - 26) / (gpu_max_temp - gpu_min_temp))
 
 def set_gpu_fan(speed_percent):
     # clamp between 0–100
