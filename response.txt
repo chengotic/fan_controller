@@ -1,0 +1,3 @@
+I don't automatically update the `GEMINI.md` file after every change. I only update it when explicitly requested or when significant changes to the project's structure, dependencies, or usage warrant a documentation update.
+
+Would you like me to update the `GEMINI.md` file now to reflect the latest changes?
