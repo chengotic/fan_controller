@@ -11,10 +11,6 @@ A modern, professional Linux fan controller with an intuitive graphical interfac
 🎯 **Real-time Monitoring**: Live temperature and fan speed display  
 🔒 **Smooth Control**: Gradual speed changes to prevent sudden fan speed jumps  
 
-## Screenshots
-
-> The application features a modern dark theme with cyan accents and an interactive graph for editing fan control curves.
-
 ## Installation
 
 ### From Source
