@@ -18,23 +18,24 @@ from .hardware import find_sensors, find_fans
 
 
 def get_config_dir() -> Path:
-    """Get the configuration directory."""
-    # Use current directory if config.json exists (backward compatibility)
-    current_dir = Path.cwd()
-    if (current_dir / "config.json").exists():
-        return current_dir
-    
-    # Otherwise use ~/.config/fan_controller
+    """Get the configuration directory, creating it if needed."""
     config_dir = Path.home() / ".config" / "fan_controller"
     config_dir.mkdir(parents=True, exist_ok=True)
     
-    # Copy old config if it exists
-    old_config = current_dir / "config.json"
-    new_config = config_dir / "config.json"
-    if old_config.exists() and not new_config.exists():
-        import shutil
-        shutil.copy(old_config, new_config)
+    new_config_path = config_dir / "config.json"
     
+    # If a config already exists in the new location, we're done.
+    if new_config_path.exists():
+        return config_dir
+        
+    # For backward compatibility, check the CWD
+    old_config_path = Path.cwd() / "config.json"
+    if old_config_path.exists():
+        import shutil
+        shutil.copy(old_config_path, new_config_path)
+        return config_dir
+        
+    # If no config is found, the load_config function will create a default one.
     return config_dir
 
 

@@ -3,6 +3,13 @@
 # This script sets the necessary permissions for the fan controller to run without sudo.
 # It needs to be run with sudo itself.
 
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run this script with sudo."
+  exit 1
+fi
+
+USER=${SUDO_USER:-$(logname)}
+
 # Find all hwmon directories
 for hwmon in /sys/class/hwmon/hwmon*; do
   # Enable all pwm controls
@@ -16,8 +23,8 @@ for hwmon in /sys/class/hwmon/hwmon*; do
   # Change permissions for pwm files
   for pwm in "$hwmon"/pwm*; do
     if [ -f "$pwm" ]; then
-      chown "$SUDO_USER" "$pwm"
-      echo "Changed owner of $pwm to $SUDO_USER"
+      chown "$USER" "$pwm"
+      echo "Changed owner of $pwm to $USER"
     fi
   done
 done
@@ -33,7 +40,7 @@ if command -v nvidia-settings &> /dev/null; then
     fi
     echo "Creating $SUDOERS_FILE..."
     # Allow the user to run any nvidia-settings command without a password (for debugging)
-    echo "$SUDO_USER ALL=(ALL) NOPASSWD: /usr/bin/nvidia-settings *" | tee "$SUDOERS_FILE"
+    echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/nvidia-settings *" | tee "$SUDOERS_FILE"
     echo "Permissions for nvidia-settings configured."
 else
     echo "nvidia-settings not found, skipping GPU configuration."

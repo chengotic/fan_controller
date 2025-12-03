@@ -13,4 +13,4 @@ htmlcov/
 .tox/
 *.log
 .fan_controller_status.json
-config.json
+config.jsonnohup.out
