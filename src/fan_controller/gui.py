@@ -269,6 +269,14 @@ class FanControlApp(QWidget):
             if key not in self.config:
                 self.config[key] = [] if "hidden" in key else {}
 
+        # Convert old single sensor format to new multi-sensor format if necessary
+        for curve_name, curve_data in self.config["curves"].items():
+            if isinstance(curve_data.get("sensor"), str):
+                curve_data["sensor"] = {
+                    "function": "single", # Use "single" as a pseudo-function for single sensor curves
+                    "paths": [curve_data["sensor"]]
+                }
+
     def save_config(self):
         """Save configuration to file."""
         if "fans" not in self.config:
@@ -340,25 +348,29 @@ class FanControlApp(QWidget):
 
         # Update hardware tab
         for fan_path, widgets in self.fan_widgets.items():
-            curve_name = self.config.get("fans", {}).get(fan_path)
-            if not curve_name:
-                continue
-            
-            curve = self.config.get("curves", {}).get(curve_name)
-            if not curve:
+            fan_status = status_data.get("fans", {}).get(fan_path)
+            if not fan_status:
+                widgets["temp_label"].setText("--°C")
+                widgets["speed_label"].setText("--%")
                 continue
 
-            sensor_path = curve["sensor"]
-            temp = status_data.get("sensors", {}).get(sensor_path)
-            speed = status_data.get("fans", {}).get(fan_path)
+            temp = fan_status.get("effective_temp")
+            speed = fan_status.get("speed")
 
             if temp is not None:
                 widgets["temp_label"].setText(f"Temp: {temp:.1f}°C")
+            else:
+                widgets["temp_label"].setText("--°C")
+                
             if speed is not None:
                 widgets["speed_label"].setText(f"Speed: {speed:.1f}%")
+            else:
+                widgets["speed_label"].setText("--%")
 
     def update_sensor_combo(self, status_data):
         """Update sensor combo boxes with current temperatures."""
+        if not self.sensor_items:
+            return
         for sensor_path, item in self.sensor_items.items():
             temp = status_data.get("sensors", {}).get(sensor_path)
             display_text = self.get_alias(sensor_path)
@@ -512,23 +524,41 @@ class FanControlApp(QWidget):
         self.curve_name_input = QLineEdit()
         curve_name_layout.addWidget(self.curve_name_input)
 
-        # Sensor selection
-        sensor_layout = QHBoxLayout()
-        curve_editor_layout.addLayout(sensor_layout)
-        sensor_layout.addWidget(QLabel("Sensor:"))
-        self.sensor_combo = QComboBox()
-        self.sensor_combo_model = QStandardItemModel()
-        self.sensor_combo.setModel(self.sensor_combo_model)
-        sensor_layout.addWidget(self.sensor_combo)
+        # Sensor Configuration
+        sensor_config_layout = QVBoxLayout()
+        curve_editor_layout.addLayout(sensor_config_layout)
 
-        # Populate sensor combo
-        self.sensor_items = {}
+        # Aggregation Function
+        function_layout = QHBoxLayout()
+        sensor_config_layout.addLayout(function_layout)
+        function_layout.addWidget(QLabel("Aggregation Function:"))
+        self.function_combo = QComboBox()
+        self.function_combo.addItems(["Single", "Max", "Min", "Average"])
+        function_layout.addWidget(self.function_combo)
+        
+        # Selected Sensors
+        sensor_config_layout.addWidget(QLabel("Selected Sensors:"))
+        self.selected_sensors_list = QListWidget()
+        sensor_config_layout.addWidget(self.selected_sensors_list)
+
+        # Add/Remove Sensors
+        add_remove_layout = QHBoxLayout()
+        sensor_config_layout.addLayout(add_remove_layout)
+        self.available_sensors_combo = QComboBox()
+        add_remove_layout.addWidget(self.available_sensors_combo)
+        
+        self.add_sensor_button = QPushButton("Add Sensor")
+        self.remove_sensor_button = QPushButton("Remove Selected")
+        add_remove_layout.addWidget(self.add_sensor_button)
+        add_remove_layout.addWidget(self.remove_sensor_button)
+
+        self.add_sensor_button.clicked.connect(self.add_selected_sensor)
+        self.remove_sensor_button.clicked.connect(self.remove_selected_sensor)
+
+        # Populate available sensors combo
+        self.available_sensors_combo.addItem("Select a sensor to add", userData="") # Placeholder
         for sensor_name, sensor_path in self.sensors.items():
-            item = QStandardItem()
-            item.setData(sensor_path, Qt.ItemDataRole.UserRole)
-            item.setText(sensor_name)
-            self.sensor_items[sensor_path] = item
-            self.sensor_combo_model.appendRow(item)
+            self.available_sensors_combo.addItem(sensor_name, userData=sensor_path)
 
         # Buttons
         button_layout = QHBoxLayout()
@@ -651,6 +681,28 @@ class FanControlApp(QWidget):
         
         self.update_ui_with_aliases()
 
+    def add_selected_sensor(self):
+        """Add the selected sensor from available sensors to the selected sensors list."""
+        sensor_path = self.available_sensors_combo.currentData(Qt.ItemDataRole.UserRole)
+        sensor_name = self.available_sensors_combo.currentText()
+        if sensor_path and sensor_path not in [self.selected_sensors_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.selected_sensors_list.count())]:
+            item = QListWidgetItem(sensor_name)
+            item.setData(Qt.ItemDataRole.UserRole, sensor_path)
+            self.selected_sensors_list.addItem(item)
+            # Remove from available combo (optional, for UX)
+            # self.available_sensors_combo.removeItem(self.available_sensors_combo.currentIndex())
+
+    def remove_selected_sensor(self):
+        """Remove the selected sensor from the selected sensors list."""
+        current_item = self.selected_sensors_list.currentItem()
+        if current_item:
+            sensor_path = current_item.data(Qt.ItemDataRole.UserRole)
+            sensor_name = current_item.text()
+            self.selected_sensors_list.takeItem(self.selected_sensors_list.row(current_item))
+            # Add back to available combo (optional, for UX)
+            # self.available_sensors_combo.addItem(sensor_name, userData=sensor_path)
+
+
     def new_curve(self):
         """Create a new fan curve."""
         curve_name = self.curve_name_input.text().strip()
@@ -672,13 +724,9 @@ class FanControlApp(QWidget):
         if "curves" not in self.config:
             self.config["curves"] = {}
         
-        # Get first sensor if available
-        sensor_path = self.sensor_combo.currentData(Qt.ItemDataRole.UserRole)
-        if not sensor_path and len(self.sensors) > 0:
-            sensor_path = list(self.sensors.values())[0]
         
         self.config["curves"][curve_name] = {
-            "sensor": sensor_path,
+            "sensor": {"function": "single", "paths": []}, # Initialize with empty multi-sensor
             "points": [[20, 0], [80, 100]]
         }
         self.save_config()
@@ -700,21 +748,34 @@ class FanControlApp(QWidget):
         if not item:
             self.curve_name_input.clear()
             self.curve_plot.set_points([])
-            self.sensor_combo.setCurrentIndex(0)
+            self.selected_sensors_list.clear()
+            self.function_combo.setCurrentIndex(0) # Set to "Single"
             return
         
         curve_name = item.text()
         self.curve_name_input.setText(curve_name)
+        
+        self.selected_sensors_list.clear()
+        
         if curve_name in self.config.get("curves", {}):
             curve_data = self.config["curves"][curve_name]
             self.curve_plot.set_points(curve_data["points"])
-            sensor_path = curve_data["sensor"]
             
-            # Find the index of the sensor_path in the model
-            for i in range(self.sensor_combo_model.rowCount()):
-                if self.sensor_combo_model.item(i).data(Qt.ItemDataRole.UserRole) == sensor_path:
-                    self.sensor_combo.setCurrentIndex(i)
-                    break
+            sensor_config = curve_data["sensor"]
+            function_name = sensor_config.get("function", "single")
+            sensor_paths = sensor_config.get("paths", [])
+
+            # Set aggregation function
+            index = self.function_combo.findText(function_name.capitalize())
+            if index != -1:
+                self.function_combo.setCurrentIndex(index)
+            
+            # Populate selected sensors list
+            for path in sensor_paths:
+                alias = self.get_alias(path)
+                item = QListWidgetItem(alias)
+                item.setData(Qt.ItemDataRole.UserRole, path)
+                self.selected_sensors_list.addItem(item)
 
     def save_curve(self):
         """Save the current curve."""
@@ -731,13 +792,22 @@ class FanControlApp(QWidget):
             self.config["curves"][curve_name] = self.config["curves"].pop(old_curve_name)
             current_item.setText(curve_name)
 
-        sensor_path = self.sensor_combo.currentData(Qt.ItemDataRole.UserRole)
+        selected_function = self.function_combo.currentText().lower()
+        selected_paths = []
+        for i in range(self.selected_sensors_list.count()):
+            item = self.selected_sensors_list.item(i)
+            selected_paths.append(item.data(Qt.ItemDataRole.UserRole))
+        
+        sensor_config = {
+            "function": selected_function,
+            "paths": selected_paths
+        }
         points = self.curve_plot.points
 
         if "curves" not in self.config:
             self.config["curves"] = {}
         self.config["curves"][curve_name] = {
-            "sensor": sensor_path,
+            "sensor": sensor_config,
             "points": points
         }
         self.save_config()
