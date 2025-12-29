@@ -1,0 +1,112 @@
+{
+  "curves": {
+    "cpu": {
+      "sensor": "/sys/class/hwmon/hwmon0/temp3_input",
+      "points": [
+        [
+          65.2881821940833,
+          0.0
+        ],
+        [
+          85.04986064794676,
+          99.66147596479347
+        ]
+      ]
+    },
+    "gpu": {
+      "sensor": "nvidia-smi",
+      "points": [
+        [
+          63.91345673642323,
+          0.0
+        ],
+        [
+          85.39354201236178,
+          100.0
+        ]
+      ]
+    },
+    "max": {
+      "sensor": "/sys/class/hwmon/hwmon0/temp6_input",
+      "points": [
+        [
+          0.0,
+          100.0
+        ],
+        [
+          98.78091257401603,
+          100.0
+        ]
+      ]
+    }
+  },
+  "fans": {
+    "/sys/class/hwmon/hwmon0/pwm5": "cpu",
+    "/sys/class/hwmon/hwmon0/pwm3": "cpu",
+    "/sys/class/hwmon/hwmon0/pwm1": "gpu",
+    "/sys/class/hwmon/hwmon0/pwm4": "cpu",
+    "/sys/class/hwmon/hwmon0/pwm2": "gpu",
+    "nvidia-settings": "gpu",
+    "/sys/class/hwmon/hwmon1/pwm5": "cpu",
+    "/sys/class/hwmon/hwmon1/pwm3": "cpu",
+    "/sys/class/hwmon/hwmon1/pwm1": "cpu",
+    "/sys/class/hwmon/hwmon1/pwm4": "cpu",
+    "/sys/class/hwmon/hwmon1/pwm2": "cpu"
+  },
+  "aliases": {
+    "/sys/class/hwmon/hwmon0/pwm5": "pwm5",
+    "/sys/class/hwmon/hwmon0/pwm3": "pwm3",
+    "/sys/class/hwmon/hwmon0/pwm1": "Case",
+    "/sys/class/hwmon/hwmon0/pwm4": "pwm4",
+    "/sys/class/hwmon/hwmon0/pwm2": "CPU",
+    "nvidia-settings": "nvidia-settings",
+    "/sys/class/hwmon/hwmon0/temp6_input": "temp6_input",
+    "/sys/class/hwmon/hwmon0/temp13_input": "temp13_input",
+    "/sys/class/hwmon/hwmon0/temp3_input": "CPU-temp-probably",
+    "/sys/class/hwmon/hwmon0/temp17_input": "temp17_input",
+    "/sys/class/hwmon/hwmon0/temp10_input": "temp10_input",
+    "/sys/class/hwmon/hwmon0/temp7_input": "temp7_input",
+    "/sys/class/hwmon/hwmon0/temp20_input": "testing-high-temp",
+    "/sys/class/hwmon/hwmon0/temp4_input": "temp4_input",
+    "/sys/class/hwmon/hwmon0/temp18_input": "temp18_input",
+    "/sys/class/hwmon/hwmon0/temp11_input": "temp11_input",
+    "/sys/class/hwmon/hwmon0/temp8_input": "temp8_input",
+    "/sys/class/hwmon/hwmon0/temp1_input": "temp1_input",
+    "/sys/class/hwmon/hwmon0/temp15_input": "temp15_input",
+    "/sys/class/hwmon/hwmon0/temp5_input": "temp5_input",
+    "/sys/class/hwmon/hwmon0/temp19_input": "temp19_input",
+    "/sys/class/hwmon/hwmon0/temp12_input": "temp12_input",
+    "/sys/class/hwmon/hwmon0/temp9_input": "temp9_input",
+    "/sys/class/hwmon/hwmon0/temp2_input": "CPU-temp-less_probably",
+    "/sys/class/hwmon/hwmon0/temp16_input": "temp16_input",
+    "nvidia-smi": "GPU-temp"
+  },
+  "hardware": {
+    "nvidia_min_fan_speed": 26
+  },
+  "hidden_sensors": [
+    "/sys/class/hwmon/hwmon0/temp6_input",
+    "/sys/class/hwmon/hwmon0/temp15_input",
+    "/sys/class/hwmon/hwmon0/temp5_input",
+    "/sys/class/hwmon/hwmon0/temp19_input",
+    "/sys/class/hwmon/hwmon0/temp12_input",
+    "/sys/class/hwmon/hwmon0/temp9_input",
+    "/sys/class/hwmon/hwmon0/temp16_input",
+    "/sys/class/hwmon/hwmon0/temp13_input",
+    "/sys/class/hwmon/hwmon0/temp17_input",
+    "/sys/class/hwmon/hwmon0/temp10_input",
+    "/sys/class/hwmon/hwmon0/temp7_input",
+    "/sys/class/hwmon/hwmon0/temp4_input",
+    "/sys/class/hwmon/hwmon0/temp18_input",
+    "/sys/class/hwmon/hwmon0/temp11_input",
+    "/sys/class/hwmon/hwmon0/temp8_input",
+    "/sys/class/hwmon/hwmon0/pwm5",
+    "/sys/class/hwmon/hwmon0/pwm3",
+    "/sys/class/hwmon/hwmon0/pwm4"
+  ],
+  "hidden_fans": [
+    "/sys/class/hwmon/hwmon0/pwm5",
+    "/sys/class/hwmon/hwmon0/pwm3",
+    "/sys/class/hwmon/hwmon0/pwm4"
+  ]
+}

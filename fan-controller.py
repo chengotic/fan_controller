@@ -69,15 +69,16 @@ def set_fan_speed(fan_path, speed, config, last_speeds):
             ]
             subprocess.run(command, check=True, capture_output=True, text=True)
         else:
-            # Enable manual fan control if not already enabled
-            if fan_path not in last_speeds:
-                enable_path = Path(fan_path.replace("pwm", "pwm_enable"))
-                if enable_path.exists():
-                    try:
+            # Enable manual fan control. Some systems require this before every write.
+            enable_path = Path(fan_path.replace("pwm", "pwm_enable"))
+            if enable_path.exists():
+                try:
+                    # Only write if it's not already in manual mode to avoid unnecessary writes.
+                    if enable_path.read_text().strip() != "1":
                         enable_path.write_text("1")
-                        logging.info(f"Enabled manual fan control for {fan_path}")
-                    except IOError as e:
-                        logging.warning(f"Could not enable manual fan control for {fan_path}: {e}")
+                        logging.info(f"Set manual fan control for {fan_path}")
+                except IOError as e:
+                    logging.warning(f"Could not enable manual fan control for {fan_path}: {e}")
 
             pwm_max = 255
             pwm_max_path = Path(fan_path.replace("pwm", "pwm_max"))
@@ -88,7 +89,16 @@ def set_fan_speed(fan_path, speed, config, last_speeds):
                     logging.warning(f"Could not read {pwm_max_path}, defaulting pwm_max to 255.")
 
             speed_pwm = max(0, min(pwm_max, int(speed / 100 * pwm_max)))
-            Path(fan_path).write_text(str(speed_pwm))
+            # Retry writing to the pwm file to handle cases where the file is temporarily busy
+            for i in range(3):
+                try:
+                    Path(fan_path).write_text(str(speed_pwm))
+                    break
+                except IOError as e:
+                    if e.errno == 16 and i < 2: # errno 16 is "Device or resource busy"
+                        time.sleep(0.1)
+                        continue
+                    raise
     except (FileNotFoundError, IOError, subprocess.CalledProcessError) as e:
         logging.error(f"Failed to set fan speed for {fan_path}: {e}")
 
@@ -119,8 +129,39 @@ def main():
         curves = config.get("curves", {})
         fans = config.get("fans", {})
         last_speeds = {}
+        
+        last_loop_time = time.time()
+        last_status_write_time = 0
+        last_force_refresh_time = 0
+        FORCE_REFRESH_INTERVAL = 60
+        STATUS_WRITE_INTERVAL = 2
 
         while True:
+            current_time = time.time()
+            
+            # Sleep Detection
+            if current_time - last_loop_time > 5:
+                logging.warning("Sleep detected! (Time jump > 5s). Forcing refresh of all fans.")
+                last_speeds.clear() # Clear cache to force re-apply
+                # Force re-enable manual mode check
+                for fan_path in fans:
+                    if "pwm" in fan_path and "_" not in fan_path:
+                         enable_path = Path(fan_path.replace("pwm", "pwm_enable"))
+                         if enable_path.exists():
+                             try:
+                                 enable_path.write_text("1")
+                                 logging.info(f"Re-enabled manual fan control for {fan_path} after sleep")
+                             except IOError as e:
+                                 logging.warning(f"Could not re-enable manual fan control for {fan_path}: {e}")
+
+            # Periodic Force Refresh
+            if current_time - last_force_refresh_time > FORCE_REFRESH_INTERVAL:
+                logging.info("Periodic force refresh executing...")
+                last_speeds.clear()
+                last_force_refresh_time = current_time
+
+            last_loop_time = current_time
+
             # Update all sensor temperatures in status
             for sensor_path in all_sensors.values():
                 temp = read_temp(sensor_path)
@@ -130,15 +171,12 @@ def main():
                 curve_name = config.get("fans", {}).get(fan_path)
 
                 if not curve_name:
-                    logging.warning(f"No curve assigned to fan '{fan_path}'. Skipping.")
                     continue
                 
                 if "pwm" in fan_path and "_" in fan_path:
-                    logging.warning(f"Skipping non-fan PWM path: {fan_path}")
                     continue
                 
                 if curve_name not in curves:
-                    logging.warning(f"Curve '{curve_name}' not found for fan '{fan_path}'. Skipping.")
                     continue
 
                 curve = curves[curve_name]
@@ -149,26 +187,39 @@ def main():
                 if temp is None:
                     continue
 
-                logging.info(f"Using curve points: {points} for temp: {temp}°C")
                 speed = get_fan_speed_from_curve(temp, points)
-                logging.info(f"Calculated speed (before smoothing): {speed:.1f}%")
 
-                last_speed = last_speeds.get(fan_path, speed)
+                # Smoothing
+                last_speed_val = last_speeds.get(fan_path, speed)
                 step = 10
-                if speed > last_speed + step:
-                    speed = last_speed + step
-                elif speed < last_speed - step:
-                    speed = last_speed - step
-                last_speeds[fan_path] = speed
-
-                set_fan_speed(fan_path, speed, config, last_speeds)
-                logging.info(f"Fan {fan_path}: Temp {temp}°C -> Speed {speed:.1f}%")
-
-                # Update fan speeds in status
+                if speed > last_speed_val + step:
+                    speed = last_speed_val + step
+                elif speed < last_speed_val - step:
+                    speed = last_speed_val - step
+                
+                # Check if we actually need to change speed (Optimization)
+                # For nvidia settings, we want to be very careful to avoid spamming
+                should_update = False
+                if fan_path not in last_speeds:
+                    should_update = True
+                else:
+                    # Only update if changed by more than 1% to avoid jitter
+                    if abs(speed - last_speeds[fan_path]) > 1.0:
+                         should_update = True
+                
+                if should_update:
+                    set_fan_speed(fan_path, speed, config, last_speeds)
+                    logging.info(f"Fan {fan_path}: Temp {temp:.1f}°C -> Speed {speed:.1f}%")
+                    last_speeds[fan_path] = speed
+                
+                # Update fan speeds in status (always update status even if not applied to hardware, for UI)
                 status["fans"][fan_path] = speed
-
-            with open(STATUS_PATH, "w") as f:
-                json.dump(status, f, indent=2)
+            
+            # Optimize status writing
+            if current_time - last_status_write_time > STATUS_WRITE_INTERVAL:
+                with open(STATUS_PATH, "w") as f:
+                    json.dump(status, f, indent=2)
+                last_status_write_time = current_time
 
             time.sleep(1)
     except Exception as e:
@@ -181,9 +232,6 @@ def main():
             with open(STATUS_PATH, "w") as f:
                 json.dump(status, f)
         _cleanup_status()
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()
