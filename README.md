@@ -1,15 +1,15 @@
 # Fan Controller
 
-A modern, professional Linux fan controller with an intuitive graphical interface.
+A Linux fan controller with an intuitive graphical interface.
 
 ## Features
 
-✨ **Modern UI**: Beautiful dark-themed GUI built with PyQt6  
-📊 **Interactive Curves**: Click-and-drag curve editor for precise control  
-🔧 **Hardware Support**: Works with standard Linux `hwmon` sensors/fans and NVIDIA GPUs  
-⚙️ **Custom Aliases**: Name your sensors and fans for easy identification  
-🎯 **Real-time Monitoring**: Live temperature and fan speed display  
-🔒 **Smooth Control**: Gradual speed changes to prevent sudden fan speed jumps  
+**Modern UI**: Beautiful dark-themed GUI built with PyQt6  
+**Interactive Curves**: Click-and-drag curve editor for precise control  
+**Hardware Support**: Works with standard Linux `hwmon` sensors/fans and NVIDIA GPUs  
+**Custom Aliases**: Name your sensors and fans for easy identification  
+**Real-time Monitoring**: Live temperature and fan speed display  
+**Smooth Control**: Gradual speed changes to prevent sudden fan speed jumps  
 
 ## Installation
 
