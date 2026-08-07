@@ -657,15 +657,29 @@ class FanControlApp(QWidget):
                 self.config[key] = [] if "hidden" in key else {}
 
         # Convert old single sensor format to new multi-sensor format if necessary
-        for curve_name, curve_data in self.config["curves"].items():
+        config_changed = False
+        for curve_name, curve_data in self.config.get("curves", {}).items():
             if isinstance(curve_data.get("sensor"), str):
                 curve_data["sensor"] = {
                     "function": "single", # Use "single" as a pseudo-function for single sensor curves
                     "paths": [curve_data["sensor"]]
                 }
+                config_changed = True
+            elif not isinstance(curve_data.get("sensor"), dict) or "function" not in curve_data["sensor"] or "paths" not in curve_data["sensor"]:
+                # Invalid config - fix it
+                curve_data["sensor"] = {"function": "single", "paths": []}
+                config_changed = True
+        
+        # Save the converted config back to file if it was changed
+        if config_changed:
+            self.save_config()
 
-    def save_config(self):
-        """Save configuration to file."""
+    def save_config(self, restart=True):
+        """Save configuration to file.
+        
+        Args:
+            restart: Whether to restart the controller after saving (default: True)
+        """
         if "fans" not in self.config:
             self.config["fans"] = {}
         
@@ -682,7 +696,8 @@ class FanControlApp(QWidget):
         with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=2)
         
-        self.restart_controller()
+        if restart:
+            self.restart_controller()
 
     def restart_controller(self):
         """Restart the fan controller daemon."""
@@ -1324,8 +1339,8 @@ class FanControlApp(QWidget):
             "points": points
         }
         
-        # Save to file and restart controller
-        self.save_config()
+        # Save to file without restarting (auto-save on drag)
+        self.save_config(restart=False)
     
     def save_curve(self):
         """Save the current curve."""

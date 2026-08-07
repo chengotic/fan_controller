@@ -1,0 +1,3 @@
+[console_scripts]
+fan-controller = fan_controller.main:main_cli
+fan-controller-gui = fan_controller.main:main_gui
