@@ -57,6 +57,10 @@ class FanController:
             elif not isinstance(curve_data.get("sensor"), dict) or "function" not in curve_data["sensor"] or "paths" not in curve_data["sensor"]:
                 logger.error(f"Invalid sensor configuration for curve '{curve_name}'. Skipping.")
                 curve_data["sensor"] = {"function": "single", "paths": []} # Default to empty
+        
+        # Save the converted config back to file
+        with open(self.config_path, "w") as f:
+            json.dump(self.config, f, indent=2)
 
         return True
 
