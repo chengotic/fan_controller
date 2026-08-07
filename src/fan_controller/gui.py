@@ -4,17 +4,339 @@ from pathlib import Path
 import subprocess
 import os
 from typing import Dict, Optional
+from datetime import datetime
 
-from PyQt6.QtCore import Qt, QPointF, QTimer
+from PyQt6.QtCore import Qt, QPointF, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGridLayout, QComboBox, QListWidget, QListWidgetItem, QTabWidget, 
-    QScrollArea, QLineEdit, QStatusBar, QSpinBox, QCheckBox
+    QScrollArea, QLineEdit, QStatusBar, QSpinBox, QCheckBox, QFrame,
+    QSpacerItem, QSizePolicy, QGraphicsDropShadowEffect, QStackedWidget
 )
-from PyQt6.QtGui import QStandardItem, QStandardItemModel, QPalette, QColor
+from PyQt6.QtGui import QStandardItem, QStandardItemModel, QPalette, QColor, QFont, QIcon, QPainter, QLinearGradient, QPen, QBrush, QPixmap
 import pyqtgraph as pg
 
 from .hardware import find_sensors, find_fans
+
+
+# Modern Color Palette
+class Colors:
+    """Modern color palette for the application."""
+    # Primary colors
+    PRIMARY = "#00d4ff"
+    PRIMARY_DARK = "#00b8e6"
+    PRIMARY_LIGHT = "#33e0ff"
+    
+    # Secondary colors
+    SECONDARY = "#ff6b35"
+    SECONDARY_DARK = "#e65a2b"
+    
+    # Background colors
+    BG_DARKEST = "#1a1a2e"
+    BG_DARK = "#1f1f35"
+    BG_MEDIUM = "#252542"
+    BG_LIGHT = "#2b2b4a"
+    BG_CARD = "#2a2a40"
+    
+    # Text colors
+    TEXT_PRIMARY = "#ffffff"
+    TEXT_SECONDARY = "#b8b8d0"
+    TEXT_MUTED = "#6b6b80"
+    
+    # Status colors
+    SUCCESS = "#00ff88"
+    WARNING = "#ffaa00"
+    ERROR = "#ff4466"
+    INFO = "#00d4ff"
+    
+    # Gradient stops
+    GRADIENT_START = "#00d4ff"
+    GRADIENT_END = "#0099cc"
+
+
+MODERN_STYLESHEET = f"""
+/* Global Styles */
+QWidget {{
+    font-family: 'Segoe UI', 'Inter', 'Roboto', Arial, sans-serif;
+    font-size: 10pt;
+    color: {Colors.TEXT_PRIMARY};
+    background-color: {Colors.BG_DARKEST};
+}}
+
+/* Scrollbar Styling */
+QScrollBar:vertical {{
+    background-color: {Colors.BG_DARK};
+    width: 10px;
+    border-radius: 5px;
+    margin: 0px;
+}}
+QScrollBar::handle:vertical {{
+    background-color: {Colors.BG_LIGHT};
+    border-radius: 5px;
+    min-height: 20px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background-color: {Colors.PRIMARY};
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+    height: 0px;
+}}
+
+QScrollBar:horizontal {{
+    background-color: {Colors.BG_DARK};
+    height: 10px;
+    border-radius: 5px;
+    margin: 0px;
+}}
+QScrollBar::handle:horizontal {{
+    background-color: {Colors.BG_LIGHT};
+    border-radius: 5px;
+    min-width: 20px;
+}}
+QScrollBar::handle:horizontal:hover {{
+    background-color: {Colors.PRIMARY};
+}}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+    width: 0px;
+}}
+
+/* Buttons */
+QPushButton {{
+    background-color: {Colors.PRIMARY};
+    color: {Colors.BG_DARKEST};
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 10pt;
+    min-width: 100px;
+}}
+QPushButton:hover {{
+    background-color: {Colors.PRIMARY_LIGHT};
+}}
+QPushButton:pressed {{
+    background-color: {Colors.PRIMARY_DARK};
+}}
+QPushButton:disabled {{
+    background-color: {Colors.BG_LIGHT};
+    color: {Colors.TEXT_MUTED};
+}}
+
+/* Secondary Button Style */
+QPushButton#secondaryButton {{
+    background-color: transparent;
+    border: 2px solid {Colors.PRIMARY};
+    color: {Colors.PRIMARY};
+}}
+QPushButton#secondaryButton:hover {{
+    background-color: {Colors.PRIMARY};
+    color: {Colors.BG_DARKEST};
+}}
+
+/* Danger Button Style */
+QPushButton#dangerButton {{
+    background-color: {Colors.ERROR};
+    color: white;
+}}
+QPushButton#dangerButton:hover {{
+    background-color: #ff6685;
+}}
+
+/* Input Fields */
+QLineEdit, QComboBox, QSpinBox {{
+    background-color: {Colors.BG_MEDIUM};
+    border: 2px solid {Colors.BG_LIGHT};
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: {Colors.TEXT_PRIMARY};
+    selection-background-color: {Colors.PRIMARY};
+}}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+    border: 2px solid {Colors.PRIMARY};
+}}
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover {{
+    border: 2px solid {Colors.PRIMARY_DARK};
+}}
+
+QComboBox::drop-down {{
+    border: none;
+    width: 30px;
+}}
+QComboBox::down-arrow {{
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid {Colors.PRIMARY};
+    margin-right: 10px;
+}}
+
+/* SpinBox arrows */
+QSpinBox::up-button, QSpinBox::down-button {{
+    border: none;
+    width: 20px;
+    background-color: {Colors.BG_LIGHT};
+}}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+    background-color: {Colors.PRIMARY};
+}}
+
+/* Tab Widget */
+QTabWidget::pane {{
+    border: none;
+    background-color: transparent;
+    border-radius: 12px;
+}}
+QTabBar::tab {{
+    background-color: transparent;
+    color: {Colors.TEXT_SECONDARY};
+    padding: 12px 24px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+    margin-right: 4px;
+}}
+QTabBar::tab:hover {{
+    color: {Colors.TEXT_PRIMARY};
+    background-color: {Colors.BG_CARD};
+}}
+QTabBar::tab:selected {{
+    color: {Colors.PRIMARY};
+    border-bottom: 3px solid {Colors.PRIMARY};
+    background-color: transparent;
+}}
+QTabBar::tab:first {{
+    margin-left: 8px;
+}}
+QTabBar::tab:last {{
+    margin-right: 8px;
+}}
+
+/* Status Bar */
+QStatusBar {{
+    background-color: {Colors.BG_CARD};
+    color: {Colors.TEXT_SECONDARY};
+    border-top: 1px solid {Colors.BG_LIGHT};
+    padding: 8px;
+    font-size: 9pt;
+}}
+
+/* List Widget */
+QListWidget {{
+    background-color: {Colors.BG_MEDIUM};
+    border: 2px solid {Colors.BG_LIGHT};
+    border-radius: 8px;
+    padding: 4px;
+    outline: none;
+}}
+QListWidget::item {{
+    padding: 10px;
+    border-radius: 6px;
+    margin: 2px 4px;
+    background-color: transparent;
+}}
+QListWidget::item:hover {{
+    background-color: {Colors.BG_LIGHT};
+}}
+QListWidget::item:selected {{
+    background-color: {Colors.PRIMARY};
+    color: {Colors.BG_DARKEST};
+    font-weight: 600;
+}}
+
+/* CheckBox */
+QCheckBox {{
+    color: {Colors.TEXT_PRIMARY};
+    spacing: 8px;
+}}
+QCheckBox::indicator {{
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border: 2px solid {Colors.BG_LIGHT};
+    background-color: {Colors.BG_MEDIUM};
+}}
+QCheckBox::indicator:hover {{
+    border: 2px solid {Colors.PRIMARY};
+}}
+QCheckBox::indicator:checked {{
+    background-color: {Colors.PRIMARY};
+    border: 2px solid {Colors.PRIMARY};
+}}
+
+/* Labels */
+QLabel {{
+    color: {Colors.TEXT_PRIMARY};
+    background-color: transparent;
+}}
+QLabel#titleLabel {{
+    font-size: 18pt;
+    font-weight: 700;
+    color: {Colors.TEXT_PRIMARY};
+}}
+QLabel#sectionTitle {{
+    font-size: 12pt;
+    font-weight: 600;
+    color: {Colors.PRIMARY};
+}}
+QLabel#valueLabel {{
+    font-size: 14pt;
+    font-weight: 600;
+    color: {Colors.SUCCESS};
+}}
+QLabel#mutedLabel {{
+    color: {Colors.TEXT_MUTED};
+    font-size: 9pt;
+}}
+
+/* Card/Frame */
+QFrame#card {{
+    background-color: {Colors.BG_CARD};
+    border-radius: 12px;
+    border: 1px solid {Colors.BG_LIGHT};
+}}
+QFrame#headerCard {{
+    background-color: {Colors.BG_CARD};
+    border-radius: 16px;
+    border: none;
+}}
+
+/* GroupBox */
+QGroupBox {{
+    font-weight: 600;
+    color: {Colors.TEXT_SECONDARY};
+    border: 2px solid {Colors.BG_LIGHT};
+    border-radius: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+}}
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 8px;
+    color: {Colors.PRIMARY};
+}}
+
+/* Tool Tip */
+QToolTip {{
+    background-color: {Colors.BG_CARD};
+    color: {Colors.TEXT_PRIMARY};
+    border: 1px solid {Colors.BG_LIGHT};
+    border-radius: 4px;
+    padding: 6px 10px;
+}}
+
+/* Progress Bar (if needed later) */
+QProgressBar {{
+    background-color: {Colors.BG_MEDIUM};
+    border-radius: 6px;
+    height: 8px;
+    text-align: center;
+}}
+QProgressBar::chunk {{
+    background-color: {Colors.PRIMARY};
+    border-radius: 6px;
+}}
+"""
 
 
 def get_config_dir() -> Path:
@@ -40,37 +362,75 @@ def get_config_dir() -> Path:
 
 
 class FanCurvePlot(pg.PlotWidget):
-    """Interactive plot widget for editing fan curves."""
+    """Interactive plot widget for editing fan curves with modern styling."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        # Set up plot appearance
-        self.setBackground('#2b2b2b')
+        # Set up modern plot appearance
+        self.setBackground(Colors.BG_MEDIUM)
         self.setLimits(xMin=0, xMax=100, yMin=0, yMax=100)
-        self.getPlotItem().vb.setXRange(0, 100, padding=0)
-        self.getPlotItem().vb.setYRange(0, 100, padding=0)
-        self.setLabel('bottom', 'Temperature', '°C')
-        self.setLabel('left', 'Fan Speed', '%')
-        self.showGrid(x=True, y=True, alpha=0.3)
+        self.getPlotItem().vb.setXRange(0, 100, padding=0.05)
+        self.getPlotItem().vb.setYRange(0, 100, padding=0.05)
         
-        # Create curve
+        # Style axis labels
+        self.setLabel('bottom', 'Temperature (°C)', color=Colors.TEXT_SECONDARY, size='12pt')
+        self.setLabel('left', 'Fan Speed (%)', color=Colors.TEXT_SECONDARY, size='12pt')
+        
+        # Style ticks
+        ax_bottom = self.getAxis('bottom')
+        ax_left = self.getAxis('left')
+        ax_bottom.setTickFont(QFont('Segoe UI', 9))
+        ax_left.setTickFont(QFont('Segoe UI', 9))
+        ax_bottom.setPen(QPen(QColor(Colors.TEXT_MUTED), 1))
+        ax_left.setPen(QPen(QColor(Colors.TEXT_MUTED), 1))
+        
+        # Show subtle grid
+        self.showGrid(x=True, y=True, alpha=0.2, color=Colors.TEXT_MUTED)
+        
+        # Create gradient curve
+        gradient = QLinearGradient(0, 0, 100, 100)
+        gradient.setColorAt(0, QColor(Colors.GRADIENT_START))
+        gradient.setColorAt(1, QColor(Colors.GRADIENT_END))
+        
+        # Create curve with modern styling
         self.curve = self.plot(
-            pen=pg.mkPen(color='#00d4ff', width=2),
+            pen=pg.mkPen(color=Colors.PRIMARY, width=3),
             symbol='o',
-            symbolBrush='#ff6b35',
-            symbolSize=10
+            symbolBrush=QColor(Colors.SECONDARY),
+            symbolPen=QColor(Colors.BG_DARKEST),
+            symbolSize=12,
+            shadowPen=pg.mkPen(color='#00000080', width=5)
         )
+        
+        # Add glow effect area under curve
+        self.fill_curve = self.plot(
+            fillLevel=0,
+            brush=pg.mkBrush(color=f'{Colors.PRIMARY}40')
+        )
+        
         self.points = []
         self.dragged_point = None
         self.getPlotItem().vb.setMouseEnabled(x=False, y=False)
+        
+        # Remove default border
+        self.setStyleSheet("border: none;")
 
     def set_points(self, points):
         """Set the curve points and update the plot."""
+        if not points:
+            self.curve.setData([], [])
+            self.fill_curve.setData([], [])
+            self.points = []
+            return
+            
         self.points = sorted([[float(p[0]), float(p[1])] for p in points])
         x_coords = [p[0] for p in self.points]
         y_coords = [p[1] for p in self.points]
         self.curve.setData(x_coords, y_coords)
+        
+        # Update filled area under curve
+        self.fill_curve.setData(x_coords, y_coords)
 
     def mousePressEvent(self, ev):
         pos = self.getPlotItem().vb.mapSceneToView(QPointF(ev.pos()))
@@ -117,36 +477,106 @@ class FanCurvePlot(pg.PlotWidget):
 
 
 class FanControlApp(QWidget):
-    """Main application window for fan controller GUI."""
+    """Main application window for fan controller GUI with modern UI."""
     
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Fan Controller")
-        self.resize(900, 700)
+        self.setMinimumSize(1200, 800)
+        self.resize(1400, 900)
         
         # Set up config paths
         self.config_dir = get_config_dir()
         self.config_path = self.config_dir / "config.json"
         self.status_path = self.config_dir / ".fan_controller_status.json"
         
-        # Apply dark theme
-        self.apply_dark_theme()
+        # Apply modern theme
+        self.apply_modern_theme()
         
-        # Create tabs
+        # Create main layout with header
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Header section
+        header_frame = QFrame()
+        header_frame.setObjectName("headerCard")
+        header_frame.setMaximumHeight(120)
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(30, 20, 30, 20)
+        
+        # App title and icon area
+        title_layout = QVBoxLayout()
+        title_layout.setSpacing(5)
+        
+        app_title = QLabel("FAN CONTROLLER")
+        app_title.setObjectName("titleLabel")
+        app_title.setStyleSheet(f"""
+            font-size: 24pt;
+            font-weight: 700;
+            color: {Colors.TEXT_PRIMARY};
+            letter-spacing: 2px;
+        """)
+        
+        subtitle = QLabel("Advanced Temperature-Based Fan Control")
+        subtitle.setObjectName("mutedLabel")
+        subtitle.setStyleSheet(f"""
+            font-size: 10pt;
+            color: {Colors.TEXT_SECONDARY};
+        """)
+        
+        title_layout.addWidget(app_title)
+        title_layout.addWidget(subtitle)
+        title_layout.addStretch()
+        
+        header_layout.addLayout(title_layout)
+        header_layout.addStretch()
+        
+        # Status indicator in header
+        status_indicator_layout = QVBoxLayout()
+        status_indicator_layout.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        
+        self.status_dot = QLabel("●")
+        self.status_dot.setStyleSheet(f"""
+            font-size: 24pt;
+            color: {Colors.WARNING};
+        """)
+        
+        self.status_label = QLabel("INITIALIZING...")
+        self.status_label.setStyleSheet(f"""
+            font-size: 10pt;
+            color: {Colors.TEXT_SECONDARY};
+            font-weight: 500;
+        """)
+        
+        status_row = QHBoxLayout()
+        status_row.addWidget(self.status_dot)
+        status_row.addWidget(self.status_label)
+        status_row.setSpacing(8)
+        
+        status_indicator_layout.addLayout(status_row)
+        header_layout.addLayout(status_indicator_layout)
+        
+        main_layout.addWidget(header_frame)
+        
+        # Tab widget
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("mainTabs")
         self.hardware_tab = QWidget()
         self.curves_tab = QWidget()
         self.aliases_tab = QWidget()
 
-        self.tabs.addTab(self.hardware_tab, "Hardware")
-        self.tabs.addTab(self.curves_tab, "Curves")
-        self.tabs.addTab(self.aliases_tab, "Aliases")
-
-        # Main layout
-        main_layout = QVBoxLayout()
+        self.tabs.addTab(self.hardware_tab, "Hardware Monitor")
+        self.tabs.addTab(self.curves_tab, "Fan Curves")
+        self.tabs.addTab(self.aliases_tab, "Device Settings")
+        
         main_layout.addWidget(self.tabs)
+        
+        # Modern status bar
         self.status_bar = QStatusBar()
+        self.status_bar.setSizeGripEnabled(False)
         main_layout.addWidget(self.status_bar)
+        
         self.setLayout(main_layout)
 
         # Initialize data
@@ -154,6 +584,7 @@ class FanControlApp(QWidget):
         self.controller_process = None
         self.sensors = {}
         self.sensor_items = {}
+        self.fan_widgets = {}
 
         # Initialize UI
         self.init_aliases_tab()
@@ -169,82 +600,26 @@ class FanControlApp(QWidget):
         # Start controller
         self.restart_controller()
 
-    def apply_dark_theme(self):
+    def apply_modern_theme(self):
         """Apply a modern dark theme to the application."""
         palette = QPalette()
-        palette.setColor(QPalette.ColorRole.Window, QColor(35, 35, 35))
-        palette.setColor(QPalette.ColorRole.WindowText, QColor(255, 255, 255))
-        palette.setColor(QPalette.ColorRole.Base, QColor(45, 45, 45))
-        palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
-        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 255))
-        palette.setColor(QPalette.ColorRole.ToolTipText, QColor(255, 255, 255))
-        palette.setColor(QPalette.ColorRole.Text, QColor(255, 255, 255))
-        palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
-        palette.setColor(QPalette.ColorRole.ButtonText, QColor(255, 255, 255))
-        palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
-        palette.setColor(QPalette.ColorRole.Link, QColor(0, 212, 255))
-        palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 212, 255))
-        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(0, 0, 0))
+        palette.setColor(QPalette.ColorRole.Window, QColor(Colors.BG_DARKEST))
+        palette.setColor(QPalette.ColorRole.WindowText, QColor(Colors.TEXT_PRIMARY))
+        palette.setColor(QPalette.ColorRole.Base, QColor(Colors.BG_MEDIUM))
+        palette.setColor(QPalette.ColorRole.AlternateBase, QColor(Colors.BG_LIGHT))
+        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(Colors.BG_CARD))
+        palette.setColor(QPalette.ColorRole.ToolTipText, QColor(Colors.TEXT_PRIMARY))
+        palette.setColor(QPalette.ColorRole.Text, QColor(Colors.TEXT_PRIMARY))
+        palette.setColor(QPalette.ColorRole.Button, QColor(Colors.BG_CARD))
+        palette.setColor(QPalette.ColorRole.ButtonText, QColor(Colors.TEXT_PRIMARY))
+        palette.setColor(QPalette.ColorRole.BrightText, QColor(Colors.ERROR))
+        palette.setColor(QPalette.ColorRole.Link, QColor(Colors.PRIMARY))
+        palette.setColor(QPalette.ColorRole.Highlight, QColor(Colors.PRIMARY))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(Colors.BG_DARKEST))
         self.setPalette(palette)
 
-        # Additional styling
-        self.setStyleSheet("""
-            QWidget {
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 10pt;
-            }
-            QPushButton {
-                background-color: #00d4ff;
-                color: #000;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #00b8e6;
-            }
-            QPushButton:pressed {
-                background-color: #0099c2;
-            }
-            QLineEdit, QComboBox, QSpinBox {
-                background-color: #3d3d3d;
-                border: 1px solid #555;
-                border-radius: 3px;
-                padding: 5px;
-                color: #fff;
-            }
-            QLineEdit:focus, QComboBox:focus, QSpinBox:focus {
-                border: 1px solid #00d4ff;
-            }
-            QTabWidget::pane {
-                border: 1px solid #555;
-                background-color: #2b2b2b;
-            }
-            QTabBar::tab {
-                background-color: #3d3d3d;
-                color: #fff;
-                padding: 10px;
-                border: 1px solid #555;
-            }
-            QTabBar::tab:selected {
-                background-color: #00d4ff;
-                color: #000;
-            }
-            QStatusBar {
-                background-color: #1e1e1e;
-                color: #fff;
-            }
-            QListWidget {
-                background-color: #3d3d3d;
-                border: 1px solid #555;
-                border-radius: 3px;
-            }
-            QListWidget::item:selected {
-                background-color: #00d4ff;
-                color: #000;
-            }
-        """)
+        # Apply comprehensive modern stylesheet
+        self.setStyleSheet(MODERN_STYLESHEET)
 
     def get_alias(self, path: str) -> str:
         """Get the alias for a hardware path."""
@@ -313,8 +688,9 @@ class FanControlApp(QWidget):
         )
 
     def update_status(self):
-        """Update the status bar and hardware display."""
+        """Update the status bar and hardware display with modern indicators."""
         if not self.status_path.exists():
+            self.update_status_indicator("stopped")
             self.status_bar.showMessage("Controller: STOPPED")
             return
 
@@ -322,6 +698,7 @@ class FanControlApp(QWidget):
             with open(self.status_path, "r") as f:
                 status_data = json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
+            self.update_status_indicator("unknown")
             self.status_bar.showMessage("Controller: STATUS UNKNOWN")
             return
 
@@ -331,6 +708,7 @@ class FanControlApp(QWidget):
             if pid:
                 os.kill(pid, 0)
         except OSError:
+            self.update_status_indicator("stopped")
             self.status_bar.showMessage("Controller: STOPPED")
             if self.status_path.exists():
                 self.status_path.unlink()
@@ -338,15 +716,18 @@ class FanControlApp(QWidget):
 
         controller_status = status_data.get("status", "UNKNOWN")
         if controller_status == "running":
+            self.update_status_indicator("running")
             self.status_bar.showMessage("Controller: RUNNING")
             self.update_sensor_combo(status_data)
         elif controller_status == "error":
+            self.update_status_indicator("error")
             error_message = status_data.get('error_message', 'Unknown error')
             self.status_bar.showMessage(f"Controller: ERROR ({error_message})")
         else:
+            self.update_status_indicator("unknown")
             self.status_bar.showMessage(f"Controller: {controller_status.upper()}")
 
-        # Update hardware tab
+        # Update hardware tab with animated labels
         for fan_path, widgets in self.fan_widgets.items():
             fan_status = status_data.get("fans", {}).get(fan_path)
             if not fan_status:
@@ -358,14 +739,39 @@ class FanControlApp(QWidget):
             speed = fan_status.get("speed")
 
             if temp is not None:
-                widgets["temp_label"].setText(f"Temp: {temp:.1f}°C")
+                widgets["temp_label"].setText(f"{temp:.1f}°C")
             else:
                 widgets["temp_label"].setText("--°C")
                 
             if speed is not None:
-                widgets["speed_label"].setText(f"Speed: {speed:.1f}%")
+                widgets["speed_label"].setText(f"{speed:.1f}%")
             else:
                 widgets["speed_label"].setText("--%")
+    
+    def update_status_indicator(self, status: str):
+        """Update the header status indicator based on controller status."""
+        colors = {
+            "running": Colors.SUCCESS,
+            "stopped": Colors.ERROR,
+            "error": Colors.ERROR,
+            "unknown": Colors.WARNING,
+            "initializing": Colors.WARNING
+        }
+        
+        color = colors.get(status, Colors.TEXT_MUTED)
+        text = status.upper()
+        
+        self.status_dot.setStyleSheet(f"""
+            font-size: 24pt;
+            color: {color};
+        """)
+        
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"""
+            font-size: 10pt;
+            color: {color};
+            font-weight: 600;
+        """)
 
     def update_sensor_combo(self, status_data):
         """Update sensor combo boxes with current temperatures."""
@@ -417,7 +823,7 @@ class FanControlApp(QWidget):
         return fans
 
     def init_hardware_tab(self):
-        """Initialize the hardware tab."""
+        """Initialize the hardware tab with modern card-based layout."""
         # Clear existing widgets
         if self.hardware_tab.layout() is not None:
             while self.hardware_tab.layout().count():
@@ -429,61 +835,158 @@ class FanControlApp(QWidget):
             self.hardware_tab.setLayout(QVBoxLayout())
 
         scroll = QScrollArea()
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background: transparent;")
         self.hardware_tab.layout().addWidget(scroll)
+        
         content = QWidget()
+        content.setStyleSheet("background: transparent;")
         scroll.setWidget(content)
         scroll.setWidgetResizable(True)
-        layout = QGridLayout(content)
-        layout.setSpacing(10)
-        layout.setContentsMargins(10, 10, 10, 10)
-
-        # Add headers
-        layout.addWidget(QLabel("<b>Fan</b>"), 0, 0)
-        layout.addWidget(QLabel("<b>Curve</b>"), 0, 1)
-        layout.addWidget(QLabel("<b>Temperature</b>"), 0, 2)
-        layout.addWidget(QLabel("<b>Speed</b>"), 0, 3)
+        
+        layout = QVBoxLayout(content)
+        layout.setSpacing(16)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Section title
+        section_title = QLabel("FAN CONFIGURATION")
+        section_title.setObjectName("sectionTitle")
+        section_title.setStyleSheet(f"""
+            font-size: 14pt;
+            font-weight: 600;
+            color: {Colors.PRIMARY};
+            margin-bottom: 8px;
+        """)
+        layout.addWidget(section_title)
 
         self.fan_widgets = {}
         fans = self.find_fans()
-        i = 1
+        
         for fan_name, fan_path in fans.items():
-            label = QLabel(fan_name)
-            combo = QComboBox()
-            temp_label = QLabel("--°C")
-            speed_label = QLabel("--%")
+            # Create card for each fan
+            card = QFrame()
+            card.setObjectName("card")
+            card_layout = QHBoxLayout(card)
+            card_layout.setContentsMargins(20, 15, 20, 15)
+            card_layout.setSpacing(20)
             
-            layout.addWidget(label, i, 0)
-            layout.addWidget(combo, i, 1)
-            layout.addWidget(temp_label, i, 2)
-            layout.addWidget(speed_label, i, 3)
+            # Fan name
+            name_label = QLabel(fan_name)
+            name_label.setStyleSheet(f"""
+                font-size: 12pt;
+                font-weight: 600;
+                color: {Colors.TEXT_PRIMARY};
+                min-width: 150px;
+            """)
+            card_layout.addWidget(name_label)
+            
+            # Curve selector
+            combo_container = QWidget()
+            combo_layout = QHBoxLayout(combo_container)
+            combo_layout.setContentsMargins(0, 0, 0, 0)
+            combo_label = QLabel("Curve:")
+            combo_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+            combo = QComboBox()
+            combo.setMinimumWidth(200)
+            combo_layout.addWidget(combo_label)
+            combo_layout.addWidget(combo)
+            card_layout.addWidget(combo_container)
+            
+            card_layout.addStretch()
+            
+            # Temperature display
+            temp_container = QWidget()
+            temp_layout = QVBoxLayout(temp_container)
+            temp_layout.setContentsMargins(0, 0, 0, 0)
+            temp_layout.setSpacing(4)
+            
+            temp_label_title = QLabel("Temperature")
+            temp_label_title.setObjectName("mutedLabel")
+            temp_label_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            temp_label = QLabel("--°C")
+            temp_label.setObjectName("valueLabel")
+            temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            temp_label.setStyleSheet(f"""
+                font-size: 18pt;
+                font-weight: 700;
+                color: {Colors.SUCCESS};
+            """)
+            
+            temp_layout.addWidget(temp_label_title)
+            temp_layout.addWidget(temp_label)
+            card_layout.addWidget(temp_container)
+            
+            # Speed display
+            speed_container = QWidget()
+            speed_layout = QVBoxLayout(speed_container)
+            speed_layout.setContentsMargins(0, 0, 0, 0)
+            speed_layout.setSpacing(4)
+            
+            speed_label_title = QLabel("Speed")
+            speed_label_title.setObjectName("mutedLabel")
+            speed_label_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            speed_label = QLabel("--%")
+            speed_label.setObjectName("valueLabel")
+            speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            speed_label.setStyleSheet(f"""
+                font-size: 18pt;
+                font-weight: 700;
+                color: {Colors.PRIMARY};
+            """)
+            
+            speed_layout.addWidget(speed_label_title)
+            speed_layout.addWidget(speed_label)
+            card_layout.addWidget(speed_container)
             
             widgets = {
-                "label": label,
+                "label": name_label,
                 "combo": combo,
                 "temp_label": temp_label,
                 "speed_label": speed_label,
+                "card": card
             }
 
             if fan_path == "nvidia-settings":
+                min_speed_container = QWidget()
+                min_speed_layout = QHBoxLayout(min_speed_container)
+                min_speed_layout.setContentsMargins(0, 0, 0, 0)
+                
                 min_speed_label = QLabel("Min Speed:")
+                min_speed_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
+                
                 min_speed_spinbox = QSpinBox()
                 min_speed_spinbox.setRange(0, 100)
+                min_speed_spinbox.setMinimumWidth(80)
                 min_speed_spinbox.setValue(
                     self.config.get("hardware", {}).get("nvidia_min_fan_speed", 26)
                 )
-                layout.addWidget(min_speed_label, i, 4)
-                layout.addWidget(min_speed_spinbox, i, 5)
+                
+                min_speed_layout.addWidget(min_speed_label)
+                min_speed_layout.addWidget(min_speed_spinbox)
+                card_layout.addWidget(min_speed_container)
                 widgets["min_speed_spinbox"] = min_speed_spinbox
 
+            card_layout.addStretch()
+            layout.addWidget(card)
             self.fan_widgets[fan_path] = widgets
-            i += 1
 
-        layout.setRowStretch(i, 1)
-        layout.setColumnStretch(6, 1)
-
-        save_button = QPushButton("Save Hardware Config")
+        layout.addStretch()
+        
+        # Save button container
+        button_container = QWidget()
+        button_layout = QHBoxLayout(button_container)
+        button_layout.setContentsMargins(0, 0, 0, 20)
+        
+        save_button = QPushButton("Save Hardware Configuration")
+        save_button.setMinimumHeight(45)
         save_button.clicked.connect(self.save_config)
-        layout.addWidget(save_button, i + 1, 0, 1, 2)
+        button_layout.addStretch()
+        button_layout.addWidget(save_button)
+        button_layout.addStretch()
+        
+        layout.addWidget(button_container)
 
     def init_curves_tab(self):
         """Initialize the curves tab."""
