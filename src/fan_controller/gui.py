@@ -6,7 +6,7 @@ import os
 from typing import Dict, Optional
 from datetime import datetime
 
-from PyQt6.QtCore import Qt, QPointF, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt6.QtCore import Qt, QPointF, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGridLayout, QComboBox, QListWidget, QListWidgetItem, QTabWidget, 
@@ -364,6 +364,9 @@ def get_config_dir() -> Path:
 class FanCurvePlot(pg.PlotWidget):
     """Interactive plot widget for editing fan curves with modern styling."""
     
+    # Signal emitted when curve points change
+    pointsChanged = pyqtSignal()
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         
@@ -427,6 +430,7 @@ class FanCurvePlot(pg.PlotWidget):
             self.curve.setData([], [])
             self.fill_curve.setData([], [])
             self.points = []
+            self.pointsChanged.emit()
             return
             
         self.points = sorted([[float(p[0]), float(p[1])] for p in points])
@@ -436,6 +440,9 @@ class FanCurvePlot(pg.PlotWidget):
         
         # Update filled area under curve
         self.fill_curve.setData(x_coords, y_coords)
+        
+        # Emit signal to notify of changes
+        self.pointsChanged.emit()
 
     def mousePressEvent(self, ev):
         pos = self.getPlotItem().vb.mapSceneToView(QPointF(ev.pos()))
@@ -1023,6 +1030,7 @@ class FanControlApp(QWidget):
         # Plot
         self.curve_plot = FanCurvePlot()
         self.curve_plot.setMinimumHeight(400)
+        self.curve_plot.pointsChanged.connect(self.on_curve_changed)
         curve_editor_layout.addWidget(self.curve_plot)
 
         # Curve name input
@@ -1285,6 +1293,40 @@ class FanControlApp(QWidget):
                 item.setData(Qt.ItemDataRole.UserRole, path)
                 self.selected_sensors_list.addItem(item)
 
+    def on_curve_changed(self):
+        """Handle curve changes - auto-save the current curve."""
+        current_item = self.curve_list.currentItem()
+        if not current_item:
+            return
+            
+        curve_name = current_item.text().strip()
+        if not curve_name or curve_name not in self.config.get("curves", {}):
+            return
+        
+        # Get current curve data from plot
+        selected_function = self.function_combo.currentText().lower()
+        selected_paths = []
+        for i in range(self.selected_sensors_list.count()):
+            item = self.selected_sensors_list.item(i)
+            selected_paths.append(item.data(Qt.ItemDataRole.UserRole))
+        
+        sensor_config = {
+            "function": selected_function,
+            "paths": selected_paths
+        }
+        points = [[float(p[0]), float(p[1])] for p in self.curve_plot.points]
+        
+        # Update config immediately
+        if "curves" not in self.config:
+            self.config["curves"] = {}
+        self.config["curves"][curve_name] = {
+            "sensor": sensor_config,
+            "points": points
+        }
+        
+        # Save to file and restart controller
+        self.save_config()
+    
     def save_curve(self):
         """Save the current curve."""
         curve_name = self.curve_name_input.text().strip()
