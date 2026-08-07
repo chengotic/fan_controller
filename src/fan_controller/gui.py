@@ -385,12 +385,13 @@ class FanCurvePlot(pg.PlotWidget):
         ax_bottom.setPen(QPen(QColor(Colors.TEXT_MUTED), 1))
         ax_left.setPen(QPen(QColor(Colors.TEXT_MUTED), 1))
         
-        # Show subtle grid
-        self.showGrid(x=True, y=True, alpha=0.2)
-        # Set grid color through axis pen
+        # Show subtle grid with proper styling
         grid_pen = QPen(QColor(Colors.TEXT_MUTED), 1)
-        ax_bottom.setGrid(grid_pen)
-        ax_left.setGrid(grid_pen)
+        grid_pen.setStyle(Qt.PenStyle.DotLine)
+        self.showGrid(x=True, y=True, alpha=0.2)
+        # Set grid through axis properties (pyqtgraph uses setGrid for enabling, not styling)
+        ax_bottom.gridAlpha = 0.2
+        ax_left.gridAlpha = 0.2
         
         # Create gradient curve
         gradient = QLinearGradient(0, 0, 100, 100)
