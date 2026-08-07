@@ -166,7 +166,12 @@ class FanController:
             sensor_paths_for_curve = sensor_config.get("paths", [])
 
             if not aggregation_function or not sensor_paths_for_curve:
-                logger.error(f"Invalid sensor configuration for curve '{curve_name}'. Skipping fan control.")
+                # Only log error once per curve, not every loop iteration
+                if curve_name not in getattr(self, '_invalid_curves_logged', set()):
+                    logger.error(f"Invalid sensor configuration for curve '{curve_name}'. Skipping fan control.")
+                    if not hasattr(self, '_invalid_curves_logged'):
+                        self._invalid_curves_logged = set()
+                    self._invalid_curves_logged.add(curve_name)
                 continue
 
             current_temps = []
