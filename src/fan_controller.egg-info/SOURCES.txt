@@ -1,0 +1,16 @@
+LICENSE
+README.md
+pyproject.toml
+src/fan_controller/__init__.py
+src/fan_controller/core.py
+src/fan_controller/gui.py
+src/fan_controller/hardware.py
+src/fan_controller/main.py
+src/fan_controller.egg-info/PKG-INFO
+src/fan_controller.egg-info/SOURCES.txt
+src/fan_controller.egg-info/dependency_links.txt
+src/fan_controller.egg-info/entry_points.txt
+src/fan_controller.egg-info/requires.txt
+src/fan_controller.egg-info/top_level.txt
+tests/test_core.py
+tests/test_hardware.py
