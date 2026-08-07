@@ -1,7 +1,12 @@
 {
   "curves": {
     "cpu": {
-      "sensor": "/sys/class/hwmon/hwmon0/temp3_input",
+      "sensor": {
+        "function": "single",
+        "paths": [
+          "/sys/class/hwmon/hwmon0/temp3_input"
+        ]
+      },
       "points": [
         [
           65.2881821940833,
@@ -14,7 +19,12 @@
       ]
     },
     "gpu": {
-      "sensor": "nvidia-smi",
+      "sensor": {
+        "function": "single",
+        "paths": [
+          "nvidia-smi"
+        ]
+      },
       "points": [
         [
           63.91345673642323,
@@ -27,7 +37,12 @@
       ]
     },
     "max": {
-      "sensor": "/sys/class/hwmon/hwmon0/temp6_input",
+      "sensor": {
+        "function": "single",
+        "paths": [
+          "/sys/class/hwmon/hwmon0/temp6_input"
+        ]
+      },
       "points": [
         [
           0.0,
