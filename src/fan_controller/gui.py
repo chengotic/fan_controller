@@ -386,7 +386,11 @@ class FanCurvePlot(pg.PlotWidget):
         ax_left.setPen(QPen(QColor(Colors.TEXT_MUTED), 1))
         
         # Show subtle grid
-        self.showGrid(x=True, y=True, alpha=0.2, color=Colors.TEXT_MUTED)
+        self.showGrid(x=True, y=True, alpha=0.2)
+        # Set grid color through axis pen
+        grid_pen = QPen(QColor(Colors.TEXT_MUTED), 1)
+        ax_bottom.setGrid(grid_pen)
+        ax_left.setGrid(grid_pen)
         
         # Create gradient curve
         gradient = QLinearGradient(0, 0, 100, 100)
