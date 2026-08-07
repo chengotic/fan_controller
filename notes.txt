@@ -1,2 +1,0 @@
-hwmon0 pwm1 = case-fan
-hwmon0 pwm2 = cpu-fan

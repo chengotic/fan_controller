@@ -1,11 +1,20 @@
 import sys
 import logging
+import signal
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 def get_config_dir() -> Path:
-    """Get the configuration directory, creating it if needed."""
+    """Get the configuration directory, creating it if needed.
+    
+    Returns:
+        Path to the configuration directory
+    """
     if len(sys.argv) > 1 and Path(sys.argv[1]).exists():
         # Allow overriding config directory for testing
         return Path(sys.argv[1])
@@ -29,6 +38,7 @@ def get_config_dir() -> Path:
     # If no config is found, the load_config function will create a default one.
     return config_dir
 
+
 def main_cli():
     """Entry point for the CLI daemon."""
     from .core import FanController
@@ -38,12 +48,25 @@ def main_cli():
     status_path = config_dir / ".fan_controller_status.json"
     
     controller = FanController(config_path, status_path)
+    
+    # Set up signal handlers for graceful shutdown
+    def signal_handler(signum, frame):
+        logging.info(f"Received signal {signum}, shutting down gracefully...")
+        if hasattr(controller, '_cleanup_status'):
+            controller._cleanup_status()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     controller.run()
 
+
 def main_gui():
-    """Entry point for the GUI."""
+    """Entry point for the GUI application."""
     from .gui import main as gui_main
     gui_main()
+
 
 if __name__ == "__main__":
     main_cli()

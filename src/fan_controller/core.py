@@ -6,12 +6,16 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 import atexit
 import os
+from threading import Lock
 
 from .hardware import Sensor, Fan, find_sensors, find_fans
 
 logger = logging.getLogger(__name__)
 
+
 class FanController:
+    """Main fan controller class that manages hardware monitoring and fan speed control."""
+    
     def __init__(self, config_path: Path, status_path: Path):
         self.config_path = config_path
         self.status_path = status_path
@@ -19,6 +23,7 @@ class FanController:
         self.sensors: Dict[str, Sensor] = {}
         self.fans: Dict[str, Fan] = {}
         self.last_speeds: Dict[str, float] = {}
+        self._status_lock = Lock()
         self.status = {
             "pid": os.getpid(),
             "status": "starting",
@@ -56,8 +61,13 @@ class FanController:
         return True
 
     def _write_status(self):
-        with open(self.status_path, "w") as f:
-            json.dump(self.status, f, indent=2)
+        """Write status to file with thread safety."""
+        with self._status_lock:
+            try:
+                with open(self.status_path, "w") as f:
+                    json.dump(self.status, f, indent=2)
+            except OSError as e:
+                logger.error(f"Failed to write status file: {e}")
 
     def discover_hardware(self):
         self.sensors = find_sensors()
@@ -65,13 +75,46 @@ class FanController:
         logger.info(f"Found {len(self.sensors)} sensors and {len(self.fans)} fans")
 
     def calculate_fan_speed(self, temp: float, points: List[Tuple[float, float]]) -> float:
+        """Calculate fan speed based on temperature using linear interpolation.
+        
+        Args:
+            temp: Current temperature in Celsius
+            points: List of (temperature, speed) tuples defining the curve
+            
+        Returns:
+            Fan speed percentage (0-100)
+        """
+        if not points:
+            return 0.0
+        
         points = sorted(points)
+        
+        # Handle edge cases
+        if temp <= points[0][0]:
+            return points[0][1]
+        if temp >= points[-1][0]:
+            return points[-1][1]
+        
         temps = [p[0] for p in points]
         speeds = [p[1] for p in points]
         return float(np.interp(temp, temps, speeds))
 
     def smooth_speed(self, target_speed: float, fan_path: str, step: float = 10.0) -> float:
+        """Smooth fan speed changes to prevent sudden jumps.
+        
+        Args:
+            target_speed: Desired fan speed percentage
+            fan_path: Path identifier for the fan
+            step: Maximum speed change per iteration (default: 10%)
+            
+        Returns:
+            Smoothed fan speed percentage
+        """
         last_speed = self.last_speeds.get(fan_path, target_speed)
+        
+        # Clamp target speed to valid range
+        target_speed = max(0.0, min(100.0, target_speed))
+        
         if target_speed > last_speed + step:
             return last_speed + step
         elif target_speed < last_speed - step:
@@ -79,11 +122,19 @@ class FanController:
         return target_speed
 
     def run_single_loop(self):
-        """Executes a single iteration of the fan control loop for testing."""
+        """Executes a single iteration of the fan control loop.
+        
+        Reads sensor temperatures, calculates fan speeds based on configured curves,
+        applies smoothing, and updates fan speeds.
+        """
         # Read all sensor temperatures
         for sensor_path, sensor in self.sensors.items():
-            temp = sensor.read_temp()
-            self.status["sensors"][sensor_path] = temp
+            try:
+                temp = sensor.read_temp()
+                self.status["sensors"][sensor_path] = temp
+            except Exception as e:
+                logger.error(f"Error reading sensor {sensor_path}: {e}")
+                self.status["sensors"][sensor_path] = None
 
         # Apply fan curves
         curves = self.config.get("curves", {})
@@ -100,11 +151,15 @@ class FanController:
                 continue
 
             curve = curves[curve_name]
-            sensor_config = curve["sensor"]
-            points = curve["points"]
+            sensor_config = curve.get("sensor", {})
+            points = curve.get("points", [])
+
+            if not points:
+                logger.warning(f"No points defined for curve '{curve_name}'. Skipping fan control.")
+                continue
 
             aggregation_function = sensor_config.get("function")
-            sensor_paths_for_curve = sensor_config.get("paths")
+            sensor_paths_for_curve = sensor_config.get("paths", [])
 
             if not aggregation_function or not sensor_paths_for_curve:
                 logger.error(f"Invalid sensor configuration for curve '{curve_name}'. Skipping fan control.")
@@ -116,7 +171,7 @@ class FanController:
                 if temp is not None:
                     current_temps.append(temp)
                 else:
-                    logger.warning(f"Sensor '{s_path}' for curve '{curve_name}' not providing data or not found.")
+                    logger.debug(f"Sensor '{s_path}' for curve '{curve_name}' not providing data or not found.")
 
             if not current_temps:
                 logger.warning(f"No valid sensor data for curve '{curve_name}'. Skipping fan control.")
@@ -130,7 +185,6 @@ class FanController:
             elif aggregation_function == "average":
                 effective_temp = sum(current_temps) / len(current_temps)
             elif aggregation_function == "single":
-                # This should ideally only have one sensor in paths list
                 effective_temp = current_temps[0] if current_temps else None
             else:
                 logger.error(f"Unknown aggregation function '{aggregation_function}' for curve '{curve_name}'. Skipping.")
@@ -140,22 +194,22 @@ class FanController:
                 logger.warning(f"Effective temperature could not be determined for curve '{curve_name}'. Skipping.")
                 continue
 
-            temp = effective_temp
-
-
-            target_speed = self.calculate_fan_speed(temp, points)
+            target_speed = self.calculate_fan_speed(effective_temp, points)
             smooth_speed = self.smooth_speed(target_speed, fan_path)
             self.last_speeds[fan_path] = smooth_speed
 
-            fan.set_speed(smooth_speed)
+            try:
+                fan.set_speed(smooth_speed)
+            except Exception as e:
+                logger.error(f"Failed to set speed for fan {fan_path}: {e}")
             
             # Update status with detailed info for the GUI
             self.status["fans"][fan_path] = {
                 "speed": smooth_speed,
                 "curve": curve_name,
-                "effective_temp": temp,
+                "effective_temp": effective_temp,
             }
-            logger.info(f"Fan {fan_path}: Temp {temp:.1f}°C -> Speed {smooth_speed:.1f}%")
+            logger.debug(f"Fan {fan_path}: Temp {effective_temp:.1f}°C -> Speed {smooth_speed:.1f}%")
 
         self._write_status()
 
